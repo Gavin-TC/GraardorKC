@@ -56,11 +56,7 @@ public class GKCPlugin extends Plugin
 	@Getter
 	private int bossKC;
 	@Getter
-	private int rangeMinionKC;
-	@Getter
-	private int meleeMinionKC;
-	@Getter
-	private int mageMinionKC;
+	private int minionKC;
 
 	@Getter
 	private boolean canCount = false;  // Determines whether the plugin will start counting kills
@@ -110,24 +106,19 @@ public class GKCPlugin extends Plugin
 			removeMinionCounter();
 			resetKC();
 		}
-		log.info("ticksSinceEnd: " + ticksSinceEnd);
 	}
 
 	@Subscribe
 	public void onActorDeath(ActorDeath actorDeath) {
-		Actor actor = actorDeath.getActor();
 		if (isInBandosRoom()) {
-			switch (actor.getName()) {
+			switch (actorDeath.getActor().getName()) {
 				case "General Graardor":
 					bossKC++;
 					break;
 				case "Sergeant Grimspike":
 				case "Sergeant Strongstack":
 				case "Sergeant Steelwill":
-					mageMinionKC++;
-					break;
-				default:
-					log.info("Enemy name: " + actor.getName());
+					minionKC++;
 					break;
 			}
 			updateCounters();
@@ -137,8 +128,6 @@ public class GKCPlugin extends Plugin
 	@Subscribe
 	public void onConfigChanged(ConfigChanged configChanged) {
 		if (!configChanged.getGroup().equals("graardorkc")) return;
-
-		log.info("showMinionKC() = " + config.showMinionKC());
 
 		if (!config.showMinionKC()) {
 			removeMinionCounter();
@@ -183,19 +172,13 @@ public class GKCPlugin extends Plugin
 
 	public void resetKC() {
 		bossKC = 0;
-		rangeMinionKC = 0;
-		meleeMinionKC = 0;
-		mageMinionKC = 0;
+		minionKC = 0;
 		updateCounters();
 	}
 
 	public boolean isInBandosRoom() {
 		Player localPlayer = client.getLocalPlayer();
 		return localPlayer != null && localPlayer.getWorldArea().intersectsWith(bandosRoom);
-	}
-
-	public int getMinionKC() {
-		return rangeMinionKC + meleeMinionKC + mageMinionKC;
 	}
 
 	@Provides
