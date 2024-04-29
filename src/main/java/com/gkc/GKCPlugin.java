@@ -71,33 +71,17 @@ public class GKCPlugin extends Plugin
 		log.info("Starting GKC plugin...");
 
 		ticksSinceEnd = 0;
-
-		addBossCounter();
-		if (config.showMinionKC())
-			addMinionCounter();
-
 		resetKC();
 	}
 
 	@Override
 	protected void shutDown() throws Exception
 	{
+		log.info("Shutting down GKC plugin...");
+
 		removeBossCounter();
 		removeMinionCounter();
-		bossKC = 0;
-		rangeMinionKC = 0;
-		meleeMinionKC = 0;
-		mageMinionKC = 0;
-	}
-
-
-	@Subscribe
-	public void onGameStateChanged(GameStateChanged gameStateChanged)
-	{
-		if (gameStateChanged.getGameState() == GameState.LOGGED_IN)
-		{
-			client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", "isInBandosRoom: " + isInBandosRoom(), "GKC");
-		}
+		resetKC();
 	}
 
 	@Subscribe
@@ -146,7 +130,7 @@ public class GKCPlugin extends Plugin
 					log.info("Enemy name: " + actor.getName());
 					break;
 			}
-			updateCounter();
+			updateCounters();
 		}
 	}
 
@@ -187,7 +171,7 @@ public class GKCPlugin extends Plugin
 			infoBoxManager.removeInfoBox(minionCounter);
 	}
 
-	public void updateCounter() {
+	public void updateCounters() {
 		if (bossCounter != null) {
 			bossCounter.setCount(bossKC);
 		}
@@ -202,7 +186,7 @@ public class GKCPlugin extends Plugin
 		rangeMinionKC = 0;
 		meleeMinionKC = 0;
 		mageMinionKC = 0;
-		updateCounter();
+		updateCounters();
 	}
 
 	public boolean isInBandosRoom() {
