@@ -9,10 +9,16 @@ import net.runelite.api.*;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.events.ActorDeath;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.GameTick;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.overlay.infobox.InfoBoxManager;
+
+import java.awt.image.BufferedImage;
 
 @Slf4j
 @PluginDescriptor(
@@ -22,12 +28,30 @@ import net.runelite.client.plugins.PluginDescriptor;
 )
 public class GKCPlugin extends Plugin
 {
+	private final int PET_GENERAL_GRAARDOR_ITEM_ID = 12650;
+	private final int BONES_ITEM_ID = 526;
 	private final WorldArea bandosRoom = new WorldArea(2864, 5351, 13, 20, 2);
+	private boolean checkPlayer = true;
+
+	// Ticks since player left Bandos room
+	private int ticksSinceEnd;
+	// How many ticks have to pass for the counters to hide
+	// 100 = 1 minute
+	private int ticksToHide = 100;
 
 	@Inject
 	private Client client;
 	@Inject
 	private GKCConfig config;
+
+	@Inject
+	private ItemManager itemManager;
+
+	@Inject
+	private InfoBoxManager infoBoxManager;
+
+	private KillCounter bossCounter;
+	private KillCounter minionCounter;
 
 	@Getter
 	private int bossKC;
@@ -44,12 +68,22 @@ public class GKCPlugin extends Plugin
 	@Override
 	protected void startUp() throws Exception
 	{
-		log.info("GKC started!");
+		log.info("Starting GKC plugin...");
+
+		ticksSinceEnd = 0;
+
+		addBossCounter();
+		if (config.showMinionKC())
+			addMinionCounter();
+
+		resetKC();
 	}
 
 	@Override
 	protected void shutDown() throws Exception
 	{
+		removeBossCounter();
+		removeMinionCounter();
 		bossKC = 0;
 		rangeMinionKC = 0;
 		meleeMinionKC = 0;
@@ -67,19 +101,44 @@ public class GKCPlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onGameTick(GameTick gameTick) {
+		// As soon as the player leaves the room, reset the kc
+		// Don't check again until the player has been inside the Bandos room
+		if (!isInBandosRoom()) {
+			ticksSinceEnd++;
+			if (checkPlayer) {
+				checkPlayer = false;
+				resetKC();
+			}
+		} else if (isInBandosRoom()) {
+			checkPlayer = true;
+
+			if (bossCounter == null)
+				addBossCounter();
+			if (minionCounter == null && config.showMinionKC())
+				addMinionCounter();
+		}
+
+		// If `ticksToHide` ticks have gone by, 'hide' the counters
+		// and reset the KC for later.
+		if (ticksSinceEnd > ticksToHide) {
+			removeBossCounter();
+			removeMinionCounter();
+			resetKC();
+		}
+		log.info("ticksSinceEnd: " + ticksSinceEnd);
+	}
+
+	@Subscribe
 	public void onActorDeath(ActorDeath actorDeath) {
 		Actor actor = actorDeath.getActor();
-		if (isInBandosRoom() || true) {
+		if (isInBandosRoom()) {
 			switch (actor.getName()) {
 				case "General Graardor":
 					bossKC++;
 					break;
 				case "Sergeant Grimspike":
-					rangeMinionKC++;
-					break;
 				case "Sergeant Strongstack":
-					meleeMinionKC++;
-					break;
 				case "Sergeant Steelwill":
 					mageMinionKC++;
 					break;
@@ -87,7 +146,63 @@ public class GKCPlugin extends Plugin
 					log.info("Enemy name: " + actor.getName());
 					break;
 			}
+			updateCounter();
 		}
+	}
+
+	@Subscribe
+	public void onConfigChanged(ConfigChanged configChanged) {
+		if (!configChanged.getGroup().equals("graardorkc")) return;
+
+		log.info("showMinionKC() = " + config.showMinionKC());
+
+		if (!config.showMinionKC()) {
+			removeMinionCounter();
+		} else {
+			addMinionCounter();
+		}
+	}
+
+	public void addBossCounter() {
+		BufferedImage bossImage = itemManager.getImage(PET_GENERAL_GRAARDOR_ITEM_ID);
+		bossCounter = new KillCounter(bossImage, this, bossKC);
+
+		infoBoxManager.addInfoBox(bossCounter);
+	}
+
+	public void addMinionCounter() {
+		BufferedImage rangeImage = itemManager.getImage(BONES_ITEM_ID);
+		minionCounter = new KillCounter(rangeImage, this, getMinionKC());
+
+		infoBoxManager.addInfoBox(minionCounter);
+	}
+
+	public void removeBossCounter() {
+		if (bossCounter != null)
+			infoBoxManager.removeInfoBox(bossCounter);
+	}
+
+	public void removeMinionCounter() {
+		if (minionCounter != null)
+			infoBoxManager.removeInfoBox(minionCounter);
+	}
+
+	public void updateCounter() {
+		if (bossCounter != null) {
+			bossCounter.setCount(bossKC);
+		}
+
+		if (config.showMinionKC() && minionCounter != null) {
+			minionCounter.setCount(getMinionKC());
+		}
+	}
+
+	public void resetKC() {
+		bossKC = 0;
+		rangeMinionKC = 0;
+		meleeMinionKC = 0;
+		mageMinionKC = 0;
+		updateCounter();
 	}
 
 	public boolean isInBandosRoom() {
