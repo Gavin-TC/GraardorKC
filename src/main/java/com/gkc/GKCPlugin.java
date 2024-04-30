@@ -92,6 +92,7 @@ public class GKCPlugin extends Plugin
 			}
 		} else if (isInBandosRoom()) {
 			checkPlayer = true;
+			ticksSinceEnd = 0;
 
 			if (bossCounter == null)
 				addBossCounter();
